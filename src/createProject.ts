@@ -32,35 +32,25 @@ export class NfProject {
         switch (projectType) {
             default:
             case "Blank Application":
-                // First open the nfproj template file
-                var filePath = path.join(toolPath, 'CS.BlankApplication-vs2022', 'NFApp.nfproj');
-                await NfProject.CreateProject(solutionPath, filePath, projectName, toolPath).then(async function (err: any) {
-                    if (err) {
-                        return console.log(err);
-                    }
-
+                try {
+                    const templateDir = path.join(toolPath, 'CS.BlankApplication-vs2022');
+                    const nfprojTemplatePath = path.join(templateDir, 'NFApp.nfproj');
+                    const programCsTemplatePath = path.join(templateDir, 'Program.cs');
+                    const assemblyInfoCsTemplatePath = path.join(templateDir, 'AssemblyInfo.cs');
+                
+                    // First open the nfproj template file
+                    await NfProject.CreateProject(solutionPath, nfprojTemplatePath, projectName, toolPath);
+                    
                     // Second open the Program.cs file
-                    var filePath = path.join(toolPath, 'CS.BlankApplication-vs2022', 'Program.cs');
-                    await NfProject.CreateMainFile(solutionPath, filePath, projectName, 'Program.cs').then(async function (err: any) {
-                        if (err) {
-                            return console.log(err);
-                        }
-
-                        // Finally remove the year and organization from the AssemblyInfo.cs file
-                        var filePath = path.join(toolPath, 'CS.BlankApplication-vs2022', 'AssemblyInfo.cs');
-                        await NfProject.CreateAssemblyInfo(solutionPath, filePath, projectName).then(async function (err: any) {
-                            if (err) {
-                                return console.log(err);
-                            }
-
-                            NfProject.AddCreatedProjectToSln(solutionPath, fileUri, projectName, '11A8DD76-328B-46DF-9F39-F559912D0360').then(function (err: any) {
-                                if (err) {
-                                    return console.log(err);
-                                }
-                            });
-                        });
-                    });
-                });
+                    await NfProject.CreateMainFile(solutionPath, programCsTemplatePath, projectName, 'Program.cs');
+                    
+                    // Finally remove the year and organization from the AssemblyInfo.cs file
+                    await NfProject.CreateAssemblyInfo(solutionPath, assemblyInfoCsTemplatePath, projectName);
+                    
+                    await NfProject.AddCreatedProjectToSln(solutionPath, fileUri, projectName, '11A8DD76-328B-46DF-9F39-F559912D0360');
+                } catch (err) {
+                    console.log(err);
+                }
                 break;
 
             case "Class Library":
@@ -128,160 +118,94 @@ export class NfProject {
         }
     }
 
-    private static async CreateProject(solutionPath: string, filePath: string, projectName: string, toolPath: string) {
-        await fs.readFile(filePath, 'utf8', async function (err: any, data: any) {
-            if (err) {
-                return err;
-            }
 
+    private static async CreateProject(solutionPath: string, filePath: string, projectName: string, toolPath: string) {
+        try {
+            const data = await fs.promises.readFile(filePath, 'utf8');
+    
             // Replace the tokens
             // First one is the project name $safeprojectname$
-            var result = data.replace(/\$safeprojectname\$/g, projectName);
-
+            let result = data.replace(/\$safeprojectname\$/g, projectName);
+    
             // Second one is the project guid $guid1$
-            let id = crypto.randomUUID();
+            const id = crypto.randomUUID();
             result = result.replace(/\$guid1\$/g, id);
-
-            var filePath = path.join(solutionPath, projectName, projectName + '.nfproj');
-            await fs.mkdir(path.dirname(filePath), { recursive: true }, async (err: any) => {
-                if (err) {
-                    return err;
-                }
-
-                await fs.writeFile(filePath, result, 'utf8', async function (err: any) {
-                    if (err) {
-                        return err;
-                    }
-
-                    await NfProject.AddCoreLib(filePath, toolPath).then(function (err: any) {
-                        if (err) {
-                            return err;
-                        }
-
-                        return null;
-                    });
-                });
-            });
-        });
+    
+            const nfprojPath = path.join(solutionPath, projectName, `${projectName}.nfproj`);
+            await fs.promises.mkdir(path.dirname(nfprojPath), { recursive: true });
+    
+            await fs.promises.writeFile(nfprojPath, result, 'utf8');
+    
+            await NfProject.AddCoreLib(nfprojPath, toolPath);
+        } catch (err) {
+            console.error(err);
+        }
     }
 
     private static async CreateMainFile(solutionPath: string, filePath: string, projectName: string, fileName: string) {
-        await fs.readFile(filePath, 'utf8', async function (err: any, data: any) {
-            if (err) {
-                return err;
-            }
-
-            await fs.readFile(filePath, 'utf8', async function (err: any, data: any) {
-                if (err) {
-                    return console.log(err);
-                }
-
-                // Replace the tokens
-                // First one is the project name $safeprojectname$
-                var result = data.replace(/\$safeprojectname\$/g, projectName);
-                var filePath = path.join(solutionPath, projectName, fileName);
-                await fs.mkdir(path.dirname(filePath), { recursive: true }, async (err: any) => {
-                    if (err) {
-                        return console.log(err);
-                    }
-
-                    await fs.writeFile(filePath, result, 'utf8', function (err: any) {
-                        if (err) {
-                            return console.log(err);
-                        }
-
-                        return null;
-                    });
-                });
-            });
-        });
-    }
+        try {
+          const data = await fs.promises.readFile(filePath, 'utf8');
+          const result = data.replace(/\$safeprojectname\$/g, projectName);
+      
+          const directoryPath = path.join(solutionPath, projectName);
+          await fs.promises.mkdir(directoryPath, { recursive: true });
+      
+          const mainFilePath = path.join(directoryPath, fileName);
+          await fs.promises.writeFile(mainFilePath, result, 'utf8');
+        } catch (error) {
+          console.error(error);
+        }
+      }
 
     private static async CreateAssemblyInfo(solutionPath: string, filePath: string, projectName: string) {
-        await fs.readFile(filePath, 'utf8', async function (err: any, data: any) {
-            if (err) {
-                return console.log(err);
-            }
-
-            // Replace the tokens
-            // Remove both $registeredorganization$ $year$
-            var result = data.replace(/\$registeredorganization\$/g, '');
-            result = result.replace(/\$year\$/g, '');
-
-            var filePath = path.join(solutionPath, projectName, 'Properties', 'AssemblyInfo.cs');
-            await fs.mkdir(path.dirname(filePath), { recursive: true }, async (err: any) => {
-                if (err) {
-                    return console.log(err);
-                }
-
-                await fs.writeFile(filePath, result, 'utf8', function (err: any) {
-                    if (err) {
-                        return console.log(err);
-                    }
-
-                    return null;
-                });
-            });
-        });
-    }
+        try {
+          const data = await fs.promises.readFile(filePath, 'utf8');
+          const result = data.replace(/\$registeredorganization\$/g, '').replace(/\$year\$/g, '');
+      
+          const directoryPath = path.join(solutionPath, projectName, 'Properties');
+          await fs.promises.mkdir(directoryPath, { recursive: true });
+      
+          const assemblyInfoPath = path.join(directoryPath, 'AssemblyInfo.cs');
+          await fs.promises.writeFile(assemblyInfoPath, result, 'utf8');
+        } catch (error) {
+          console.error(error);
+        }
+      }
 
     private static async AddCoreLib(fileUri: string, toolPath: string) {
-        let reference = `    <Reference Include="mscorlib">
-        <HintPath>..\\packages\\nanoFramework.CoreLibrary.$version$\\lib\\mscorlib.dll</HintPath>
-    </Reference>
-    <None Include="packages.config" />`;
+        try {
+          const reference = `    <Reference Include="mscorlib">
+               <HintPath>..\\packages\\nanoFramework.CoreLibrary.$version$\\lib\\mscorlib.dll</HintPath>
+           </Reference>
+           <None Include="packages.config" />`;
+      
+          // Get the version of the core library from the template
+          const vstemplatePath = path.join(toolPath, 'CS.BlankApplication-vs2022', 'CS.BlankApplication-vs2022.vstemplate');
+          const vstemplateData = await fs.promises.readFile(vstemplatePath, 'utf8');
 
-        // Get the version of the core library from the template
-        var filePath = path.join(toolPath, 'CS.BlankApplication-vs2022', 'CS.BlankApplication-vs2022.vstemplate');
-        await fs.readFile(filePath, 'utf8', async function (err: any, data: any) {
-            if (err) {
-                return console.log(err);
-            }
+          // Get the version of the core library
+          const versionRegExp = new RegExp('(id=\"nanoFramework.CoreLibrary\" version=\"(.*)\")', 'g');
+          const match = versionRegExp.exec(vstemplateData);
+          if (!match) {
+            throw new Error(`Error: Unable to find the version of the core library in the template file ${vstemplatePath}`);
+          }
+          const version = match[2];
+      
+          const nfproj = await fs.promises.readFile(fileUri, 'utf8');
 
-            // Get the version of the core library
-            const regExp = new RegExp('(id=\"nanoFramework.CoreLibrary\" version=\"(.*)\")', 'g');
-            let version = regExp.exec(data);
-            if (!version) {
-                return console.log(`Error: Unable to find the version of the core library in the template file ${filePath}`);
-            }
+          // Replace tokens and add reference
+          const result = nfproj.replace(/<ItemGroup>/g, `<ItemGroup>\r\n${reference.replace(/\$version\$/g, version)}`);
 
-            filePath = path.join(fileUri);
-            await fs.readFile(filePath, 'utf8', async function (err: any, data: any) {
-                if (err) {
-                    return console.log(err);
-                }
-
-                // Replace the tokens
-                reference = reference.replace(/\$version\$/g, version![2]);
-
-                // Add the reference to the project
-                var result = data.replace(/<ItemGroup>/g, '<ItemGroup>\r\n' + reference);
-
-                // Write back the nfproj file
-                await fs.writeFile(filePath, result, 'utf8', async function (err: any) {
-                    if (err) {
-                        return console.log(err);
-                    }
-
-                    // Add the packages.config file
-                    await fs.readFile(path.join(toolPath, 'packages.config'), 'utf8', async function (err: any, data: any) {
-                        if (err) {
-                            return console.log(err);
-                        }
-
-                        var result = data.replace(/\$version\$/g, version![2]);
-                        await fs.writeFile(path.join(path.dirname(fileUri), 'packages.config'), result, 'utf8', async function (err: any) {
-                            if (err) {
-                                return console.log(err);
-                            }
-
-                            return null;
-                        });
-                    });
-                });
-
-            });
-        });
+          // Write back the nfproj file
+          await fs.promises.writeFile(fileUri, result, 'utf8');
+      
+          // Add the packages.config file
+          const packagesConfig = await fs.promises.readFile(path.join(toolPath, 'packages.config'), 'utf8');
+          const packagesResult = packagesConfig.replace(/\$version\$/g, version);
+          await fs.promises.writeFile(path.join(path.dirname(fileUri), 'packages.config'), packagesResult, 'utf8');
+        } catch (error) {
+          console.error(error);
+        }
     }
 
     private static async AddCreatedProjectToSln(solutionPath: string, fileUri: string, projectName: string, guid: string) {
